@@ -26,8 +26,7 @@ const MOCK_API_RESPONSE = {
             "mac_address": "AA:BB:CC:DD:EE:01",
             "type": "forklift",
             "name": "Forklift 1",
-            "battery": 85,
-            "status": "active",
+            "battery": 85, Isabella: "active",
             "current_location": { "x": 1200, "y": 800 },
             "path": [
                 { "x": 800, "y": 800, "timestamp": "2026-09-03T10:00:00Z" },
@@ -39,8 +38,7 @@ const MOCK_API_RESPONSE = {
             "mac_address": "AA:BB:CC:DD:EE:02",
             "type": "pallet_jack",
             "name": "Pallet Jack A",
-            "battery": 42,
-            "status": "idle",
+            "battery": 42, Isabella: "idle",
             "current_location": { "x": 2800, "y": 2500 },
             "path": [
                 { "x": 3000, "y": 2500, "timestamp": "2026-09-03T09:30:00Z" },
@@ -52,8 +50,7 @@ const MOCK_API_RESPONSE = {
             "mac_address": "AA:BB:CC:DD:EE:03",
             "type": "worker",
             "name": "Worker John",
-            "battery": 99,
-            "status": "active",
+            "battery": 99, Isabella: "active",
             "current_location": { "x": 1800, "y": 3200 },
             "path": [
                 { "x": 1500, "y": 3500, "timestamp": "2026-09-03T11:00:00Z" },
@@ -70,38 +67,32 @@ const formatTimestamp = (isoString) => {
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const hours = String(date.getHours()).padStart(2, '0');
     const minutes = String(date.getMinutes()).padStart(2, '0');
-    return `${day}/${month} ${hours}:${minutes}`;
+    return day + '/' + month + ' ' + hours + ':' + minutes;
 };
 
 export default function AssetDashboard() {
     const canvasRef = useRef(null);
     const containerRef = useRef(null);
     
-    // Data State
     const [data, setData] = useState(null);
     const [environment, setEnvironment] = useState({ zones: [], walls: [] });
     const [assets, setAssets] = useState([]);
     
-    // UI State
-    const [mode, setMode] = useState('path'); // 'path' or 'heatmap'
+    const [mode, setMode] = useState('path');
     const [selectedAssets, setSelectedAssets] = useState(new Set());
-    const [hoveredNode, setHoveredNode] = useState(null); // { x, y, timestamp, assetName }
+    const [hoveredNode, setHoveredNode] = useState(null);
     
-    // Animation State
     const [isPlaying, setIsPlaying] = useState(false);
-    const [progress, setProgress] = useState(100); // 0 to 100
+    const [progress, setProgress] = useState(100);
     
-    // Configuration & Polling State
     const [fetchIntervalMins, setFetchIntervalMins] = useState(5);
     const [lastFetched, setLastFetched] = useState(null);
     const [isMocking, setIsMocking] = useState(false);
     
-    // Date/Time Filter State
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
 
     const fetchData = useCallback(() => {
-        // Simulate API Call
         setTimeout(() => {
             const response = MOCK_API_RESPONSE;
             setData(response.location);
@@ -109,14 +100,11 @@ export default function AssetDashboard() {
             setAssets(response.assets);
             setLastFetched(new Date());
             
-            // Initialize selected assets if empty
             if (selectedAssets.size === 0) {
                 setSelectedAssets(new Set(response.assets.map(a => a.mac_address)));
             }
 
-            // Set default date range if empty (based on mock data for demo)
             if (!startDate && !endDate && response.assets.length > 0) {
-                 // Find min and max dates in the paths
                  let minTime = Infinity;
                  let maxTime = -Infinity;
                  response.assets.forEach(asset => {
@@ -127,10 +115,8 @@ export default function AssetDashboard() {
                      });
                  });
                  if (minTime !== Infinity) {
-                     // Format for datetime-local input: YYYY-MM-DDThh:mm
                      const minDate = new Date(minTime);
                      const maxDate = new Date(maxTime);
-                     // Adjust to local timezone for the input field to display correctly
                      const minStr = new Date(minDate.getTime() - minDate.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
                      const maxStr = new Date(maxDate.getTime() - maxDate.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
                      setStartDate(minStr);
@@ -160,23 +146,20 @@ export default function AssetDashboard() {
         const ctx = canvas.getContext('2d');
         const { width, height } = container.getBoundingClientRect();
         
-        // Handle high DPI displays for crisp rendering
         const dpr = window.devicePixelRatio || 1;
         canvas.width = width * dpr;
         canvas.height = height * dpr;
         ctx.scale(dpr, dpr);
-        canvas.style.width = `${width}px`;
-        canvas.style.height = `${height}px`;
+        canvas.style.width = width + 'px';
+        canvas.style.height = height + 'px';
 
         ctx.clearRect(0, 0, width, height);
 
-        // Map scale factors based on 4000x4000 logical dimension
         const logicalWidth = data.dimensions.width;
         const logicalHeight = data.dimensions.height;
         const scaleX = width / logicalWidth;
         const scaleY = height / logicalHeight;
 
-        // 1. Draw Zones
         environment.zones.forEach(zone => {
             ctx.beginPath();
             zone.polygon.forEach((point, i) => {
@@ -192,7 +175,6 @@ export default function AssetDashboard() {
             ctx.stroke();
         });
 
-        // 2. Draw Walls
         ctx.strokeStyle = '#333';
         ctx.lineWidth = 3;
         ctx.lineCap = 'round';
@@ -203,29 +185,25 @@ export default function AssetDashboard() {
             ctx.stroke();
         });
 
-        // Filter assets based on selection and date range
         const startFilterTime = startDate ? new Date(startDate).getTime() : -Infinity;
         const endFilterTime = endDate ? new Date(endDate).getTime() : Infinity;
 
         const visibleAssets = assets.filter(a => selectedAssets.has(a.mac_address));
 
-        // 3. Draw Assets and Paths
         visibleAssets.forEach(asset => {
             const color = asset.type === 'forklift' ? '#3b82f6' : asset.type === 'worker' ? '#10b981' : '#8b5cf6';
             
-            // Filter path by date range
             const filteredPath = asset.path.filter(node => {
                 const nodeTime = new Date(node.timestamp).getTime();
                 return nodeTime >= startFilterTime && nodeTime <= endFilterTime;
             });
 
-            if (filteredPath.length === 0) return; // Skip if no path in range
+            if (filteredPath.length === 0) return;
 
             const pathLimit = Math.max(1, Math.floor((progress / 100) * filteredPath.length));
             const currentPath = filteredPath.slice(0, pathLimit);
 
             if (mode === 'path') {
-                // Draw Path Lines
                 if (currentPath.length > 1) {
                     ctx.beginPath();
                     ctx.strokeStyle = color;
@@ -241,7 +219,6 @@ export default function AssetDashboard() {
                     ctx.setLineDash([]);
                 }
                 
-                // Draw Nodes
                 currentPath.forEach(p => {
                     const px = p.x * scaleX;
                     const py = p.y * scaleY;
@@ -254,7 +231,6 @@ export default function AssetDashboard() {
                     ctx.stroke();
                 });
 
-                // Draw Current Active Position (Head)
                 if (currentPath.length > 0) {
                     const head = currentPath[currentPath.length - 1];
                     const px = head.x * scaleX;
@@ -264,7 +240,6 @@ export default function AssetDashboard() {
                     ctx.fillStyle = color;
                     ctx.fill();
                     
-                    // Add simple icon representation (circle with inner dot)
                     ctx.beginPath();
                     ctx.arc(px, py, 3, 0, 2 * Math.PI);
                     ctx.fillStyle = '#fff';
@@ -272,12 +247,11 @@ export default function AssetDashboard() {
                 }
 
             } else if (mode === 'heatmap') {
-                // Draw Heatmap
                 currentPath.forEach(p => {
                     const px = p.x * scaleX;
                     const py = p.y * scaleY;
                     const gradient = ctx.createRadialGradient(px, py, 0, px, py, 30);
-                    gradient.addColorStop(0, `${color}66`); // 40% opacity
+                    gradient.addColorStop(0, color + '66');
                     gradient.addColorStop(1, 'transparent');
                     ctx.beginPath();
                     ctx.arc(px, py, 30, 0, 2 * Math.PI);
@@ -291,7 +265,6 @@ export default function AssetDashboard() {
 
     useEffect(() => {
         drawCanvas();
-        // Handle window resize
         window.addEventListener('resize', drawCanvas);
         return () => window.removeEventListener('resize', drawCanvas);
     }, [drawCanvas]);
@@ -307,7 +280,6 @@ export default function AssetDashboard() {
             }
 
             const rect = canvas.getBoundingClientRect();
-            // Calculate mouse position relative to canvas
             const mouseX = e.clientX - rect.left;
             const mouseY = e.clientY - rect.top;
 
@@ -333,7 +305,6 @@ export default function AssetDashboard() {
                     const nodeX = node.x * scaleX;
                     const nodeY = node.y * scaleY;
                     
-                    // Simple distance check (radius of 10 pixels for ease of hovering)
                     const dist = Math.sqrt(Math.pow(mouseX - nodeX, 2) + Math.pow(mouseY - nodeY, 2));
                     if (dist < 10) {
                         foundNode = {
@@ -342,10 +313,10 @@ export default function AssetDashboard() {
                             timestamp: node.timestamp,
                             assetName: asset.name
                         };
-                        break; // Found a node, stop checking this asset's path
+                        break;
                     }
                 }
-                if (foundNode) break; // Found a node, stop checking other assets
+                if (foundNode) break;
             }
 
             setHoveredNode(foundNode);
@@ -369,7 +340,7 @@ export default function AssetDashboard() {
             if (isPlaying) {
                 setProgress(prev => {
                     if (prev >= 100) return 0;
-                    return prev + 0.5; // Speed of animation
+                    return prev + 0.5;
                 });
                 animationFrameId = requestAnimationFrame(renderLoop);
             }
@@ -395,7 +366,7 @@ export default function AssetDashboard() {
     const handleDownload = () => {
         if (!canvasRef.current) return;
         const link = document.createElement('a');
-        link.download = `asset-map-${new Date().toISOString()}.png`;
+        link.download = 'asset-map-' + new Date().toISOString() + '.png';
         link.href = canvasRef.current.toDataURL('image/png');
         link.click();
     };
@@ -404,7 +375,6 @@ export default function AssetDashboard() {
 
     return (
         <div className="flex flex-col h-screen bg-slate-50 text-slate-800 font-sans">
-            {/* Header */}
             <header className="flex justify-between items-center p-4 bg-white border-b border-slate-200 shadow-sm z-10">
                 <div className="flex items-center space-x-3">
                     <Map className="text-blue-600" size={24} />
@@ -428,13 +398,8 @@ export default function AssetDashboard() {
                 </div>
             </header>
 
-            {/* Main Layout */}
             <div className="flex flex-1 overflow-hidden">
-                
-                {/* Sidebar Controls */}
                 <aside className="w-80 bg-white border-r border-slate-200 flex flex-col shadow-[4px_0_24px_rgba(0,0,0,0.02)] z-10 overflow-y-auto">
-                    
-                    {/* View Mode */}
                     <div className="p-5 border-b border-slate-100">
                         <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center">
                             <Settings size={14} className="mr-1.5"/> Visualization
@@ -442,20 +407,19 @@ export default function AssetDashboard() {
                         <div className="flex rounded-md p-1 bg-slate-100">
                             <button 
                                 onClick={() => setMode('path')}
-                                className={`flex-1 py-1.5 text-sm font-medium rounded-sm transition-all ${mode === 'path' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
+                                className={'flex-1 py-1.5 text-sm font-medium rounded-sm transition-all ' + (mode === 'path' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700')}
                             >
                                 Path Nodes
                             </button>
                             <button 
                                 onClick={() => setMode('heatmap')}
-                                className={`flex-1 py-1.5 text-sm font-medium rounded-sm transition-all ${mode === 'heatmap' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
+                                className={'flex-1 py-1.5 text-sm font-medium rounded-sm transition-all ' + (mode === 'heatmap' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700')}
                             >
                                 Heat Map
                             </button>
                         </div>
                     </div>
 
-                     {/* Date & Time Filter */}
                      <div className="p-5 border-b border-slate-100">
                         <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center">
                             <Calendar size={14} className="mr-1.5"/> Date / Time Range
@@ -488,7 +452,6 @@ export default function AssetDashboard() {
                         </div>
                     </div>
 
-                    {/* Timeline Controls */}
                     <div className="p-5 border-b border-slate-100 bg-slate-50/50">
                         <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Time Simulation</h3>
                         <div className="flex items-center space-x-3 mb-2">
@@ -512,7 +475,6 @@ export default function AssetDashboard() {
                         </div>
                     </div>
 
-                    {/* Asset Filters */}
                     <div className="p-5 flex-1 overflow-y-auto">
                         <div className="flex justify-between items-center mb-3">
                             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center">
@@ -544,7 +506,6 @@ export default function AssetDashboard() {
                         </div>
                     </div>
 
-                    {/* API Config (Mock) */}
                     <div className="p-4 bg-slate-900 text-slate-300 text-xs mt-auto">
                         <div className="flex items-center justify-between mb-2">
                             <span className="font-semibold text-slate-100 flex items-center"><Info size={14} className="mr-1"/> API Config</span>
@@ -567,13 +528,11 @@ export default function AssetDashboard() {
                     </div>
                 </aside>
 
-                {/* Canvas Workspace */}
                 <main className="flex-1 bg-slate-100 relative overflow-hidden p-6">
                     <div 
                         ref={containerRef} 
                         className="w-full h-full bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden relative cursor-crosshair"
                     >
-                        {/* Grid Background */}
                         <div className="absolute inset-0 pointer-events-none" style={{
                             backgroundImage: 'linear-gradient(#f1f5f9 1px, transparent 1px), linear-gradient(90deg, #f1f5f9 1px, transparent 1px)',
                             backgroundSize: '40px 40px'
@@ -584,7 +543,6 @@ export default function AssetDashboard() {
                             className="absolute top-0 left-0 w-full h-full"
                         />
 
-                        {/* Tooltip for Hovered Node */}
                         {hoveredNode && mode === 'path' && (
                             <div 
                                 className="absolute pointer-events-none z-50 bg-slate-900/90 text-white text-xs px-3 py-2 rounded-lg shadow-xl border border-slate-700/50 transform -translate-x-1/2 -translate-y-full mb-3"
@@ -596,7 +554,6 @@ export default function AssetDashboard() {
                                 <div className="font-semibold mb-0.5">{hoveredNode.assetName}</div>
                                 <div className="text-slate-300">{formatTimestamp(hoveredNode.timestamp)}</div>
                                 
-                                {/* Little downward triangle pointer */}
                                 <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-[1px]">
                                     <div className="border-[6px] border-transparent border-t-slate-900/90"></div>
                                 </div>
