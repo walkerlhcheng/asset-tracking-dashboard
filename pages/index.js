@@ -70,32 +70,38 @@ const formatTimestamp = (isoString) => {
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const hours = String(date.getHours()).padStart(2, '0');
     const minutes = String(date.getMinutes()).padStart(2, '0');
-    return day + '/' + month + ' ' + hours + ':' + minutes;
+    return `${day}/${month} ${hours}:${minutes}`;
 };
 
 export default function AssetDashboard() {
     const canvasRef = useRef(null);
     const containerRef = useRef(null);
     
+    // Data State
     const [data, setData] = useState(null);
     const [environment, setEnvironment] = useState({ zones: [], walls: [] });
     const [assets, setAssets] = useState([]);
     
-    const [mode, setMode] = useState('path');
+    // UI State
+    const [mode, setMode] = useState('path'); // 'path' or 'heatmap'
     const [selectedAssets, setSelectedAssets] = useState(new Set());
-    const [hoveredNode, setHoveredNode] = useState(null);
+    const [hoveredNode, setHoveredNode] = useState(null); // { x, y, timestamp, assetName }
     
+    // Animation State
     const [isPlaying, setIsPlaying] = useState(false);
-    const [progress, setProgress] = useState(100);
+    const [progress, setProgress] = useState(100); // 0 to 100
     
+    // Configuration & Polling State
     const [fetchIntervalMins, setFetchIntervalMins] = useState(5);
     const [lastFetched, setLastFetched] = useState(null);
     const [isMocking, setIsMocking] = useState(false);
     
+    // Date/Time Filter State
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
 
     const fetchData = useCallback(() => {
+        // Simulate API Call
         setTimeout(() => {
             const response = MOCK_API_RESPONSE;
             setData(response.location);
@@ -103,11 +109,14 @@ export default function AssetDashboard() {
             setAssets(response.assets);
             setLastFetched(new Date());
             
+            // Initialize selected assets if empty
             if (selectedAssets.size === 0) {
                 setSelectedAssets(new Set(response.assets.map(a => a.mac_address)));
             }
 
+            // Set default date range if empty (based on mock data for demo)
             if (!startDate && !endDate && response.assets.length > 0) {
+                 // Find min and max dates in the paths
                  let minTime = Infinity;
                  let maxTime = -Infinity;
                  response.assets.forEach(asset => {
@@ -118,8 +127,10 @@ export default function AssetDashboard() {
                      });
                  });
                  if (minTime !== Infinity) {
+                     // Format for datetime-local input: YYYY-MM-DDThh:mm
                      const minDate = new Date(minTime);
                      const maxDate = new Date(maxTime);
+                     // Adjust to local timezone for the input field to display correctly
                      const minStr = new Date(minDate.getTime() - minDate.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
                      const maxStr = new Date(maxDate.getTime() - maxDate.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
                      setStartDate(minStr);
@@ -149,20 +160,23 @@ export default function AssetDashboard() {
         const ctx = canvas.getContext('2d');
         const { width, height } = container.getBoundingClientRect();
         
+        // Handle high DPI displays for crisp rendering
         const dpr = window.devicePixelRatio || 1;
         canvas.width = width * dpr;
         canvas.height = height * dpr;
         ctx.scale(dpr, dpr);
-        canvas.style.width = width + 'px';
-        canvas.style.height = height + 'px';
+        canvas.style.width = `${width}px`;
+        canvas.style.height = `${height}px`;
 
         ctx.clearRect(0, 0, width, height);
 
+        // Map scale factors based on 4000x4000 logical dimension
         const logicalWidth = data.dimensions.width;
         const logicalHeight = data.dimensions.height;
         const scaleX = width / logicalWidth;
         const scaleY = height / logicalHeight;
 
+        // 1. Draw Zones
         environment.zones.forEach(zone => {
             ctx.beginPath();
             zone.polygon.forEach((point, i) => {
@@ -178,6 +192,7 @@ export default function AssetDashboard() {
             ctx.stroke();
         });
 
+        // 2. Draw Walls
         ctx.strokeStyle = '#333';
         ctx.lineWidth = 3;
         ctx.lineCap = 'round';
@@ -188,25 +203,29 @@ export default function AssetDashboard() {
             ctx.stroke();
         });
 
+        // Filter assets based on selection and date range
         const startFilterTime = startDate ? new Date(startDate).getTime() : -Infinity;
         const endFilterTime = endDate ? new Date(endDate).getTime() : Infinity;
 
         const visibleAssets = assets.filter(a => selectedAssets.has(a.mac_address));
 
+        // 3. Draw Assets and Paths
         visibleAssets.forEach(asset => {
             const color = asset.type === 'forklift' ? '#3b82f6' : asset.type === 'worker' ? '#10b981' : '#8b5cf6';
             
+            // Filter path by date range
             const filteredPath = asset.path.filter(node => {
                 const nodeTime = new Date(node.timestamp).getTime();
                 return nodeTime >= startFilterTime && nodeTime <= endFilterTime;
             });
 
-            if (filteredPath.length === 0) return;
+            if (filteredPath.length === 0) return; // Skip if no path in range
 
             const pathLimit = Math.max(1, Math.floor((progress / 100) * filteredPath.length));
             const currentPath = filteredPath.slice(0, pathLimit);
 
             if (mode === 'path') {
+                // Draw Path Lines
                 if (currentPath.length > 1) {
                     ctx.beginPath();
                     ctx.strokeStyle = color;
@@ -222,6 +241,7 @@ export default function AssetDashboard() {
                     ctx.setLineDash([]);
                 }
                 
+                // Draw Nodes
                 currentPath.forEach(p => {
                     const px = p.x * scaleX;
                     const py = p.y * scaleY;
@@ -234,6 +254,7 @@ export default function AssetDashboard() {
                     ctx.stroke();
                 });
 
+                // Draw Current Active Position (Head)
                 if (currentPath.length > 0) {
                     const head = currentPath[currentPath.length - 1];
                     const px = head.x * scaleX;
@@ -243,6 +264,7 @@ export default function AssetDashboard() {
                     ctx.fillStyle = color;
                     ctx.fill();
                     
+                    // Add simple icon representation (circle with inner dot)
                     ctx.beginPath();
                     ctx.arc(px, py, 3, 0, 2 * Math.PI);
                     ctx.fillStyle = '#fff';
@@ -250,11 +272,12 @@ export default function AssetDashboard() {
                 }
 
             } else if (mode === 'heatmap') {
+                // Draw Heatmap
                 currentPath.forEach(p => {
                     const px = p.x * scaleX;
                     const py = p.y * scaleY;
                     const gradient = ctx.createRadialGradient(px, py, 0, px, py, 30);
-                    gradient.addColorStop(0, color + '66');
+                    gradient.addColorStop(0, `${color}66`); // 40% opacity
                     gradient.addColorStop(1, 'transparent');
                     ctx.beginPath();
                     ctx.arc(px, py, 30, 0, 2 * Math.PI);
@@ -268,6 +291,7 @@ export default function AssetDashboard() {
 
     useEffect(() => {
         drawCanvas();
+        // Handle window resize
         window.addEventListener('resize', drawCanvas);
         return () => window.removeEventListener('resize', drawCanvas);
     }, [drawCanvas]);
@@ -283,6 +307,7 @@ export default function AssetDashboard() {
             }
 
             const rect = canvas.getBoundingClientRect();
+            // Calculate mouse position relative to canvas
             const mouseX = e.clientX - rect.left;
             const mouseY = e.clientY - rect.top;
 
@@ -307,6 +332,8 @@ export default function AssetDashboard() {
                 for (const node of currentPath) {
                     const nodeX = node.x * scaleX;
                     const nodeY = node.y * scaleY;
+                    
+                    // Simple distance check (radius of 10 pixels for ease of hovering)
                     const dist = Math.sqrt(Math.pow(mouseX - nodeX, 2) + Math.pow(mouseY - nodeY, 2));
                     if (dist < 10) {
                         foundNode = {
@@ -315,17 +342,20 @@ export default function AssetDashboard() {
                             timestamp: node.timestamp,
                             assetName: asset.name
                         };
-                        break;
+                        break; // Found a node, stop checking this asset's path
                     }
                 }
-                if (foundNode) break;
+                if (foundNode) break; // Found a node, stop checking other assets
             }
+
             setHoveredNode(foundNode);
         };
 
         const handleMouseLeave = () => setHoveredNode(null);
+
         canvas.addEventListener('mousemove', handleMouseMove);
         canvas.addEventListener('mouseleave', handleMouseLeave);
+
         return () => {
             canvas.removeEventListener('mousemove', handleMouseMove);
             canvas.removeEventListener('mouseleave', handleMouseLeave);
@@ -334,30 +364,38 @@ export default function AssetDashboard() {
 
     useEffect(() => {
         let animationFrameId;
+        
         const renderLoop = () => {
             if (isPlaying) {
                 setProgress(prev => {
                     if (prev >= 100) return 0;
-                    return prev + 0.5;
+                    return prev + 0.5; // Speed of animation
                 });
                 animationFrameId = requestAnimationFrame(renderLoop);
             }
         };
-        if (isPlaying) animationFrameId = requestAnimationFrame(renderLoop);
+
+        if (isPlaying) {
+            animationFrameId = requestAnimationFrame(renderLoop);
+        }
+
         return () => cancelAnimationFrame(animationFrameId);
     }, [isPlaying]);
 
     const toggleAsset = (mac_address) => {
         const newSet = new Set(selectedAssets);
-        if (newSet.has(mac_address)) newSet.delete(mac_address);
-        else newSet.add(mac_address);
+        if (newSet.has(mac_address)) {
+            newSet.delete(mac_address);
+        } else {
+            newSet.add(mac_address);
+        }
         setSelectedAssets(newSet);
     };
 
     const handleDownload = () => {
         if (!canvasRef.current) return;
         const link = document.createElement('a');
-        link.download = 'asset-map-' + new Date().toISOString() + '.png';
+        link.download = `asset-map-${new Date().toISOString()}.png`;
         link.href = canvasRef.current.toDataURL('image/png');
         link.click();
     };
@@ -366,6 +404,7 @@ export default function AssetDashboard() {
 
     return (
         <div className="flex flex-col h-screen bg-slate-50 text-slate-800 font-sans">
+            {/* Header */}
             <header className="flex justify-between items-center p-4 bg-white border-b border-slate-200 shadow-sm z-10">
                 <div className="flex items-center space-x-3">
                     <Map className="text-blue-600" size={24} />
@@ -379,23 +418,44 @@ export default function AssetDashboard() {
                         <RefreshCw size={12} className="mr-1" />
                         Last sync: {lastFetched ? lastFetched.toLocaleTimeString() : 'Never'}
                     </div>
-                    <button onClick={handleDownload} className="flex items-center px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-md text-sm font-medium transition-colors border border-blue-200">
+                    <button 
+                        onClick={handleDownload}
+                        className="flex items-center px-3 py-1.5 bg-blue-50 text-blue-700 hover:bg-blue-100 rounded-md text-sm font-medium transition-colors border border-blue-200"
+                    >
                         <Download size={16} className="mr-2" />
                         Export PNG
                     </button>
                 </div>
             </header>
+
+            {/* Main Layout */}
             <div className="flex flex-1 overflow-hidden">
+                
+                {/* Sidebar Controls */}
                 <aside className="w-80 bg-white border-r border-slate-200 flex flex-col shadow-[4px_0_24px_rgba(0,0,0,0.02)] z-10 overflow-y-auto">
+                    
+                    {/* View Mode */}
                     <div className="p-5 border-b border-slate-100">
                         <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center">
                             <Settings size={14} className="mr-1.5"/> Visualization
                         </h3>
                         <div className="flex rounded-md p-1 bg-slate-100">
-                            <button onClick={() => setMode('path')} className={'flex-1 py-1.5 text-sm font-medium rounded-sm transition-all ' + (mode === 'path' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700')}>Path Nodes</button>
-                            <button onClick={() => setMode('heatmap')} className={'flex-1 py-1.5 text-sm font-medium rounded-sm transition-all ' + (mode === 'heatmap' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700')}>Heat Map</button>
+                            <button 
+                                onClick={() => setMode('path')}
+                                className={`flex-1 py-1.5 text-sm font-medium rounded-sm transition-all ${mode === 'path' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
+                            >
+                                Path Nodes
+                            </button>
+                            <button 
+                                onClick={() => setMode('heatmap')}
+                                className={`flex-1 py-1.5 text-sm font-medium rounded-sm transition-all ${mode === 'heatmap' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
+                            >
+                                Heat Map
+                            </button>
                         </div>
                     </div>
+
+                     {/* Date & Time Filter */}
                      <div className="p-5 border-b border-slate-100">
                         <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3 flex items-center">
                             <Calendar size={14} className="mr-1.5"/> Date / Time Range
@@ -403,36 +463,75 @@ export default function AssetDashboard() {
                         <div className="space-y-3">
                             <div>
                                 <label className="block text-xs text-slate-500 mb-1">Start Time</label>
-                                <input type="datetime-local" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full text-sm p-2 border border-slate-200 rounded-md bg-slate-50 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"/>
+                                <input 
+                                    type="datetime-local" 
+                                    value={startDate}
+                                    onChange={(e) => setStartDate(e.target.value)}
+                                    className="w-full text-sm p-2 border border-slate-200 rounded-md bg-slate-50 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                />
                             </div>
                             <div>
                                 <label className="block text-xs text-slate-500 mb-1">End Time</label>
-                                <input type="datetime-local" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full text-sm p-2 border border-slate-200 rounded-md bg-slate-50 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"/>
+                                <input 
+                                    type="datetime-local" 
+                                    value={endDate}
+                                    onChange={(e) => setEndDate(e.target.value)}
+                                    className="w-full text-sm p-2 border border-slate-200 rounded-md bg-slate-50 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                />
                             </div>
-                            <button onClick={() => { setStartDate(''); setEndDate(''); setProgress(100); }} className="w-full py-1.5 text-xs text-slate-500 border border-slate-200 rounded hover:bg-slate-50 transition-colors">Clear Filters</button>
+                            <button 
+                                onClick={() => { setStartDate(''); setEndDate(''); setProgress(100); }}
+                                className="w-full py-1.5 text-xs text-slate-500 border border-slate-200 rounded hover:bg-slate-50 transition-colors"
+                            >
+                                Clear Filters
+                            </button>
                         </div>
                     </div>
+
+                    {/* Timeline Controls */}
                     <div className="p-5 border-b border-slate-100 bg-slate-50/50">
                         <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Time Simulation</h3>
                         <div className="flex items-center space-x-3 mb-2">
-                            <button onClick={() => setIsPlaying(!isPlaying)} className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1">
+                            <button 
+                                onClick={() => setIsPlaying(!isPlaying)}
+                                className="p-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1"
+                            >
                                 {isPlaying ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" className="ml-0.5" />}
                             </button>
-                            <input type="range" min="0" max="100" value={progress} onChange={(e) => setProgress(Number(e.target.value))} className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"/>
+                            <input 
+                                type="range" 
+                                min="0" 
+                                max="100" 
+                                value={progress} 
+                                onChange={(e) => setProgress(Number(e.target.value))}
+                                className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                            />
                         </div>
-                        <div className="text-right text-xs text-slate-500 font-mono">{Math.round(progress)}% Segment</div>
+                        <div className="text-right text-xs text-slate-500 font-mono">
+                            {Math.round(progress)}% Segment
+                        </div>
                     </div>
+
+                    {/* Asset Filters */}
                     <div className="p-5 flex-1 overflow-y-auto">
                         <div className="flex justify-between items-center mb-3">
                             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center">
                                 <Filter size={14} className="mr-1.5"/> Tracked Entities
                             </h3>
-                            <span className="text-xs bg-slate-100 px-2 py-0.5 rounded-full text-slate-600 font-medium">{selectedAssets.size} / {assets.length}</span>
+                            <span className="text-xs bg-slate-100 px-2 py-0.5 rounded-full text-slate-600 font-medium">
+                                {selectedAssets.size} / {assets.length}
+                            </span>
                         </div>
+                        
                         <div className="space-y-2">
                             {assets.map(asset => (
                                 <label key={asset.mac_address} className="flex items-center p-2 hover:bg-slate-50 rounded cursor-pointer group transition-colors border border-transparent hover:border-slate-100">
-                                    <input type="checkbox" checked={selectedAssets.has(asset.mac_address)} onChange={() => toggleAsset(asset.mac_address)} className="w-4 h-4 text-blue-600 bg-slate-100 border-slate-300 rounded focus:ring-blue-500 cursor-pointer"/>
+                                    <input 
+                                        type="checkbox" 
+                                        checked={selectedAssets.has(asset.mac_address)}
+                                        onChange={() => toggleAsset(asset.mac_address)}
+                                        className="w-4 h-4 text-blue-600 bg-slate-100 border-slate-300 rounded focus:ring-blue-500 cursor-pointer"
+                                    />
                                     <div className="ml-3 flex-1">
                                         <div className="text-sm font-medium text-slate-700 group-hover:text-slate-900">{asset.name}</div>
                                         <div className="text-xs text-slate-400 flex justify-between">
@@ -444,6 +543,8 @@ export default function AssetDashboard() {
                             ))}
                         </div>
                     </div>
+
+                    {/* API Config (Mock) */}
                     <div className="p-4 bg-slate-900 text-slate-300 text-xs mt-auto">
                         <div className="flex items-center justify-between mb-2">
                             <span className="font-semibold text-slate-100 flex items-center"><Info size={14} className="mr-1"/> API Config</span>
@@ -455,18 +556,47 @@ export default function AssetDashboard() {
                         </label>
                         <div className="flex items-center justify-between opacity-50">
                             <span>Interval (mins)</span>
-                            <input type="number" value={fetchIntervalMins} onChange={(e) => setFetchIntervalMins(Number(e.target.value))} disabled={!isMocking} className="w-16 bg-slate-800 border border-slate-700 rounded p-1 text-center text-slate-100 focus:outline-none focus:border-blue-500"/>
+                            <input 
+                                type="number" 
+                                value={fetchIntervalMins} 
+                                onChange={(e) => setFetchIntervalMins(Number(e.target.value))}
+                                disabled={!isMocking}
+                                className="w-16 bg-slate-800 border border-slate-700 rounded p-1 text-center text-slate-100 focus:outline-none focus:border-blue-500" 
+                            />
                         </div>
                     </div>
                 </aside>
+
+                {/* Canvas Workspace */}
                 <main className="flex-1 bg-slate-100 relative overflow-hidden p-6">
-                    <div ref={containerRef} className="w-full h-full bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden relative cursor-crosshair">
-                        <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: 'linear-gradient(#f1f5f9 1px, transparent 1px), linear-gradient(90deg, #f1f5f9 1px, transparent 1px)', backgroundSize: '40px 40px' }}></div>
-                        <canvas ref={canvasRef} className="absolute top-0 left-0 w-full h-full" />
+                    <div 
+                        ref={containerRef} 
+                        className="w-full h-full bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden relative cursor-crosshair"
+                    >
+                        {/* Grid Background */}
+                        <div className="absolute inset-0 pointer-events-none" style={{
+                            backgroundImage: 'linear-gradient(#f1f5f9 1px, transparent 1px), linear-gradient(90deg, #f1f5f9 1px, transparent 1px)',
+                            backgroundSize: '40px 40px'
+                        }}></div>
+                        
+                        <canvas 
+                            ref={canvasRef} 
+                            className="absolute top-0 left-0 w-full h-full"
+                        />
+
+                        {/* Tooltip for Hovered Node */}
                         {hoveredNode && mode === 'path' && (
-                            <div className="absolute pointer-events-none z-50 bg-slate-900/90 text-white text-xs px-3 py-2 rounded-lg shadow-xl border border-slate-700/50 transform -translate-x-1/2 -translate-y-full mb-3" style={{ left: hoveredNode.x, top: hoveredNode.y }}>
+                            <div 
+                                className="absolute pointer-events-none z-50 bg-slate-900/90 text-white text-xs px-3 py-2 rounded-lg shadow-xl border border-slate-700/50 transform -translate-x-1/2 -translate-y-full mb-3"
+                                style={{ 
+                                    left: hoveredNode.x, 
+                                    top: hoveredNode.y 
+                                }}
+                            >
                                 <div className="font-semibold mb-0.5">{hoveredNode.assetName}</div>
                                 <div className="text-slate-300">{formatTimestamp(hoveredNode.timestamp)}</div>
+                                
+                                {/* Little downward triangle pointer */}
                                 <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-[1px]">
                                     <div className="border-[6px] border-transparent border-t-slate-900/90"></div>
                                 </div>
